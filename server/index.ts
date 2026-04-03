@@ -1,7 +1,7 @@
 /**
  * CoachOS V0.2 — Backend Server
  * Express server with API routes for AI Chat, Counselor Recommendation,
- * and Style Analysis. Serves static files in production.
+ * Style Analysis, and the 归处 AI + Coach 协同机制.
  */
 import express from "express";
 import cors from "cors";
@@ -13,6 +13,8 @@ import { fileURLToPath } from "url";
 import chatRouter from "./routes/chat.js";
 import recommendRouter from "./routes/recommend.js";
 import styleAnalyzeRouter from "./routes/style-analyze.js";
+import recommendationsRouter from "./routes/recommendations.js";
+import coachChatRouter from "./routes/coach-chat.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,15 +31,23 @@ async function startServer() {
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",
-      version: "0.2.0",
+      version: "0.2.1",
       timestamp: new Date().toISOString(),
+      features: ["guichu-ai", "specialist-coaches", "human-coaches", "recommendation-engine"],
     });
   });
 
-  // API Routes
+  // API Routes — Legacy
   app.use("/api/chat", chatRouter);
   app.use("/api/recommend", recommendRouter);
   app.use("/api/style-analyze", styleAnalyzeRouter);
+
+  // API Routes — 归处 AI + Coach 协同机制
+  app.use("/api/recommendations", recommendationsRouter);
+  app.use("/api/coach-chat", coachChatRouter);
+
+  // Return-to-main route (mounted under /api/coach)
+  app.use("/api/coach", recommendationsRouter);
 
   // Serve static files from dist/public in production
   const staticPath =
@@ -57,11 +67,19 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`CoachOS API Server running on http://localhost:${port}/`);
     console.log(`  API endpoints:`);
-    console.log(`    POST /api/chat          - AI Coach conversation`);
-    console.log(`    POST /api/chat/analyze-topic - Topic analysis`);
-    console.log(`    POST /api/recommend     - Counselor recommendation`);
-    console.log(`    POST /api/style-analyze - Style analysis`);
-    console.log(`    GET  /api/health        - Health check`);
+    console.log(`    POST /api/chat                          - AI Coach conversation`);
+    console.log(`    POST /api/chat/analyze-topic             - Topic analysis`);
+    console.log(`    POST /api/recommend                      - Counselor recommendation (legacy)`);
+    console.log(`    POST /api/style-analyze                  - Style analysis`);
+    console.log(`    POST /api/recommendations/evaluate       - Recommendation evaluation`);
+    console.log(`    GET  /api/recommendations/current        - Get current recommendation`);
+    console.log(`    POST /api/recommendations/respond        - Respond to recommendation`);
+    console.log(`    POST /api/coach/sessions/:id/return-to-main - Return to 归处 AI`);
+    console.log(`    POST /api/coach-chat                     - Specialist Coach chat`);
+    console.log(`    GET  /api/coach-chat/coaches              - List all coaches`);
+    console.log(`    GET  /api/recommendations/audit           - Audit logs`);
+    console.log(`    GET  /api/recommendations/stats           - Store stats`);
+    console.log(`    GET  /api/health                          - Health check`);
   });
 }
 

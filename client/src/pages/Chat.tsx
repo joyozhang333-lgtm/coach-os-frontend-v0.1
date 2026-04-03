@@ -1,11 +1,12 @@
-/*
+/**
  * Design: Architectural Dark Theater × Line System
- * Chat — Core feature: AI Coach switching + Counselor recommendation
- * Left: Coach list panel | Center: Chat | Right: Coach info + Recommendations
- * Now integrated with real AI via OpenAI streaming API
+ * Chat — Core feature: 归处 AI 主入口 + Coach 推荐协同机制
+ * Left: Coach list panel | Center: Chat + Recommendation Card | Right: Coach info
+ * Integrated with real AI via OpenAI streaming API
+ * New: evaluateRecommendation → RecommendationCard → respondToRecommendation
  */
 import { motion, AnimatePresence } from "framer-motion";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   Send,
   Sparkles,
@@ -24,9 +25,17 @@ import {
 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import AppLayout from "@/components/AppLayout";
-import { chatStream, analyzeTopicAPI, getRecommendations } from "@/lib/api";
+import RecommendationCard from "@/components/RecommendationCard";
+import {
+  chatStream,
+  analyzeTopicAPI,
+  getRecommendations,
+  evaluateRecommendation,
+  respondToRecommendation,
+} from "@/lib/api";
+import type { RecommendationResult } from "@/lib/api";
 
-/* ═══ Data: 4 AI Coaches ═══ */
+/* ═══ Data: 4 AI Coaches (legacy, kept for backward compat) ═══ */
 const AI_COACHES = [
   {
     id: "siyu",
@@ -166,6 +175,7 @@ const RING_COLOR_MAP: Record<string, string> = {
 };
 
 export default function Chat() {
+  const [, navigate] = useLocation();
   const [activeCoach, setActiveCoach] = useState(AI_COACHES[0]);
   const [messages, setMessages] = useState<Message[]>([
     { id: "1", role: "coach", content: AI_COACHES[0].greeting, time: "刚刚", coachId: AI_COACHES[0].id },
@@ -178,6 +188,13 @@ export default function Chat() {
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [counselors, setCounselors] = useState<Counselor[]>(DEFAULT_COUNSELORS);
   const [isLoadingRec, setIsLoadingRec] = useState(false);
+
+  // New: 归处 AI 推荐协同状态
+  const [coachRecommendation, setCoachRecommendation] = useState<RecommendationResult["recommendation"] | null>(null);
+  const [showCoachRec, setShowCoachRec] = useState(false);
+  const [isRecLoading, setIsRecLoading] = useState(false);
+  const [recDismissedThisSession, setRecDismissedThisSession] = useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -186,9 +203,9 @@ export default function Chat() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isTyping]);
+  }, [messages, isTyping, showCoachRec]);
 
-  // Trigger counselor recommendation after 3 user messages
+  // Legacy: Trigger counselor recommendation after 3 user messages
   useEffect(() => {
     if (messageCount >= 3 && !showRecommendation) {
       setShowRecommendation(true);
@@ -196,10 +213,40 @@ export default function Chat() {
     }
   }, [messageCount, showRecommendation]);
 
+  // New: Evaluate coach recommendation after each user message (>= 3 messages)
+  const evaluateCoachRecommendation = useCallback(async (currentMessage: string) => {
+    if (!sessionId || recDismissedThisSession) return;
+
+    try {
+      // Pass messageCount and recent messages for proper threshold and semantic evaluation
+      const chatHistory = messages
+        .filter((m) => m.role === "user" || m.role === "coach")
+        .slice(-20)
+        .map((m) => ({
+          role: m.role === "user" ? "user" : "assistant",
+          content: m.content,
+        }));
+
+      const result = await evaluateRecommendation({
+        sessionId,
+        currentMessage,
+        messageCount: messageCount + 1, // +1 for the current message being sent
+        messages: chatHistory,
+      });
+
+      if (result.shouldRecommend && result.recommendation) {
+        setCoachRecommendation(result.recommendation);
+        setShowCoachRec(true);
+      }
+    } catch (error) {
+      console.error("Coach recommendation evaluation failed:", error);
+      // Non-blocking: don't show error to user
+    }
+  }, [sessionId, recDismissedThisSession, messages, messageCount]);
+
   const fetchRecommendations = useCallback(async () => {
     setIsLoadingRec(true);
     try {
-      // First analyze the topic
       const chatHistory = messages
         .filter((m) => m.role === "user" || m.role === "coach")
         .map((m) => ({
@@ -209,7 +256,6 @@ export default function Chat() {
 
       const analysis = await analyzeTopicAPI(chatHistory);
 
-      // Then get recommendations
       const result = await getRecommendations({
         topic: analysis.topic,
         emotion: analysis.emotion,
@@ -222,7 +268,6 @@ export default function Chat() {
       }
     } catch (error) {
       console.error("Failed to fetch recommendations:", error);
-      // Keep default counselors with placeholder scores
       setCounselors(
         DEFAULT_COUNSELORS.map((c, i) => ({ ...c, matchScore: 90 - i * 5 }))
       );
@@ -251,7 +296,6 @@ export default function Chat() {
     const text = input.trim();
     if (!text || isTyping) return;
 
-    // Cancel any ongoing stream
     if (abortRef.current) {
       abortRef.current.abort();
     }
@@ -267,7 +311,6 @@ export default function Chat() {
     setIsTyping(true);
     setMessageCount((c) => c + 1);
 
-    // Create a placeholder for the streaming response
     const assistantMsgId = (Date.now() + 1).toString();
     const assistantMsg: Message = {
       id: assistantMsgId,
@@ -279,7 +322,6 @@ export default function Chat() {
     setMessages((prev) => [...prev, assistantMsg]);
 
     try {
-      // Build history for API
       const history = messages
         .filter((m) => m.role === "user" || m.role === "coach")
         .slice(-18)
@@ -289,7 +331,6 @@ export default function Chat() {
         }));
       history.push({ role: "user", content: text });
 
-      // Stream the response
       for await (const event of chatStream({
         coachId: activeCoach.id,
         message: text,
@@ -306,6 +347,10 @@ export default function Chat() {
           );
         } else if (event.type === "done") {
           setSessionId(event.sessionId);
+          // Trigger coach recommendation evaluation after response completes
+          if (event.messageCount >= 3) {
+            setTimeout(() => evaluateCoachRecommendation(text), 500);
+          }
         } else if (event.type === "error") {
           setMessages((prev) =>
             prev.map((m) =>
@@ -328,7 +373,7 @@ export default function Chat() {
     } finally {
       setIsTyping(false);
     }
-  }, [input, isTyping, activeCoach, sessionId, messages]);
+  }, [input, isTyping, activeCoach, sessionId, messages, evaluateCoachRecommendation]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -336,6 +381,77 @@ export default function Chat() {
       handleSend();
     }
   };
+
+  // ═══ Recommendation Card Handlers ═══
+  const handleRecContinueMain = useCallback(async () => {
+    if (!coachRecommendation) return;
+    setIsRecLoading(true);
+    try {
+      await respondToRecommendation({
+        recommendationId: coachRecommendation.id,
+        action: "continue_main_ai",
+      });
+    } catch (error) {
+      console.error("Respond to recommendation failed:", error);
+    } finally {
+      setShowCoachRec(false);
+      setCoachRecommendation(null);
+      setIsRecLoading(false);
+    }
+  }, [coachRecommendation]);
+
+  const handleRecOpenCoach = useCallback(async () => {
+    if (!coachRecommendation) return;
+    setIsRecLoading(true);
+    try {
+      const action = coachRecommendation.type === "human_coach" ? "open_human_coach" : "open_specialist_ai";
+      const result = await respondToRecommendation({
+        recommendationId: coachRecommendation.id,
+        action,
+      });
+
+      // Navigate to the appropriate page
+      if (coachRecommendation.type === "specialist_ai") {
+        const params = new URLSearchParams({
+          name: coachRecommendation.coachName,
+          avatar: coachRecommendation.coachAvatar || "",
+          specialty: coachRecommendation.coachSpecialty || "",
+          greeting: encodeURIComponent(
+            `你好，我是${coachRecommendation.coachName}。归处 AI 告诉我你想聊聊相关的话题，我们开始吧。`
+          ),
+          color: "teal",
+          mainSession: sessionId || "",
+          recId: coachRecommendation.id,
+        });
+        navigate(`/specialist/${coachRecommendation.coachId}?${params.toString()}`);
+      } else {
+        const params = new URLSearchParams({
+          name: coachRecommendation.coachName,
+        });
+        navigate(`/human-coach/${coachRecommendation.coachId}?${params.toString()}`);
+      }
+    } catch (error) {
+      console.error("Open coach failed:", error);
+    } finally {
+      setIsRecLoading(false);
+    }
+  }, [coachRecommendation, sessionId, navigate]);
+
+  const handleRecDismiss = useCallback(async () => {
+    if (!coachRecommendation) return;
+    try {
+      await respondToRecommendation({
+        recommendationId: coachRecommendation.id,
+        action: "dismiss_once",
+      });
+    } catch (error) {
+      console.error("Dismiss recommendation failed:", error);
+    } finally {
+      setShowCoachRec(false);
+      setCoachRecommendation(null);
+      setRecDismissedThisSession(true);
+    }
+  }, [coachRecommendation]);
 
   return (
     <AppLayout>
@@ -401,7 +517,7 @@ export default function Chat() {
                 <button
                   key={counselor.id}
                   className="w-full text-left p-3 rounded-lg hover:bg-secondary/50 transition-all border border-transparent group"
-                  onClick={() => {}}
+                  onClick={() => navigate(`/human-coach/${counselor.id}?name=${encodeURIComponent(counselor.name)}`)}
                 >
                   <div className="flex items-center gap-3">
                     <div className="relative">
@@ -477,6 +593,9 @@ export default function Chat() {
                     setMessages([{ id: "1", role: "coach", content: activeCoach.greeting, time: "刚刚", coachId: activeCoach.id }]);
                     setMessageCount(0);
                     setShowRecommendation(false);
+                    setShowCoachRec(false);
+                    setCoachRecommendation(null);
+                    setRecDismissedThisSession(false);
                     setSessionId(undefined);
                     setCounselors(DEFAULT_COUNSELORS);
                   }}
@@ -557,9 +676,22 @@ export default function Chat() {
                 )}
               </AnimatePresence>
 
-              {/* ═══ Counselor Recommendation Card (appears after 3 messages) ═══ */}
+              {/* ═══ NEW: 归处 AI Coach 推荐卡片 (专题 Coach / 真人 Coach) ═══ */}
               <AnimatePresence>
-                {showRecommendation && (
+                {showCoachRec && coachRecommendation && (
+                  <RecommendationCard
+                    recommendation={coachRecommendation}
+                    onContinueMain={handleRecContinueMain}
+                    onOpenCoach={handleRecOpenCoach}
+                    onDismiss={handleRecDismiss}
+                    isLoading={isRecLoading}
+                  />
+                )}
+              </AnimatePresence>
+
+              {/* ═══ Legacy: Counselor Recommendation Card (appears after 3 messages) ═══ */}
+              <AnimatePresence>
+                {showRecommendation && !showCoachRec && (
                   <motion.div
                     initial={{ opacity: 0, y: 16, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -583,7 +715,11 @@ export default function Chat() {
                       </div>
                       <div className="space-y-2">
                         {counselors.map((c) => (
-                          <div key={c.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-secondary/50 transition-colors">
+                          <div
+                            key={c.id}
+                            className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-secondary/50 transition-colors cursor-pointer"
+                            onClick={() => navigate(`/human-coach/${c.id}?name=${encodeURIComponent(c.name)}`)}
+                          >
                             <img src={c.avatar} alt={c.name} className="w-8 h-8 rounded-full object-cover ring-1 ring-border" />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
@@ -761,7 +897,11 @@ export default function Chat() {
                   </div>
                   <div className="space-y-2">
                     {counselors.map((c) => (
-                      <div key={c.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-secondary/50 transition-colors">
+                      <div
+                        key={c.id}
+                        className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-secondary/50 transition-colors cursor-pointer"
+                        onClick={() => navigate(`/human-coach/${c.id}?name=${encodeURIComponent(c.name)}`)}
+                      >
                         <img src={c.avatar} alt={c.name} className="w-7 h-7 rounded-full object-cover ring-1 ring-border" />
                         <div className="flex-1 min-w-0">
                           <span className="text-xs font-medium block">{c.name}</span>

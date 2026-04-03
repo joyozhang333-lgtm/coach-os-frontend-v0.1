@@ -8,6 +8,8 @@ import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Marketplace from "./pages/Marketplace";
 import Chat from "./pages/Chat";
+import SpecialistChat from "./pages/SpecialistChat";
+import HumanCoachPage from "./pages/HumanCoachPage";
 import Studio from "./pages/Studio";
 import Insights from "./pages/Insights";
 import Profile from "./pages/Profile";
@@ -21,6 +23,8 @@ function Router() {
       <Route path="/marketplace" component={Marketplace} />
       <Route path="/chat" component={Chat} />
       <Route path="/chat/:coachId" component={Chat} />
+      <Route path="/specialist/:coachId" component={SpecialistChat} />
+      <Route path="/human-coach/:coachId" component={HumanCoachPage} />
       <Route path="/studio" component={Studio} />
       <Route path="/insights" component={Insights} />
       <Route path="/profile" component={Profile} />
