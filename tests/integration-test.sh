@@ -1,5 +1,5 @@
 #!/bin/bash
-# CoachOS V0.2 — Integration Test Suite
+# CoachOS V0.3 — Integration Test Suite
 # Tests the complete 归处 AI + Coach 协同机制 recommendation pipeline
 set -e
 
@@ -23,7 +23,7 @@ log_test() {
 }
 
 echo "═══════════════════════════════════════════════════"
-echo " CoachOS V0.2 Integration Test Suite"
+echo " CoachOS V0.3 Integration Test Suite"
 echo " 归处 AI + Coach 协同机制 完整链路测试"
 echo "═══════════════════════════════════════════════════"
 echo ""
@@ -47,6 +47,24 @@ if echo "$HEALTH" | grep -q '"recommendation-engine"'; then
   log_test "Health reports recommendation-engine feature" "PASS"
 else
   log_test "Health reports recommendation-engine feature" "FAIL" "$HEALTH"
+fi
+
+if echo "$HEALTH" | grep -q '"0.3.0"'; then
+  log_test "Version is 0.3.0" "PASS"
+else
+  log_test "Version is 0.3.0" "FAIL" "$HEALTH"
+fi
+
+if echo "$HEALTH" | grep -q '"session-cleanup"'; then
+  log_test "Health reports session-cleanup feature (V0.3)" "PASS"
+else
+  log_test "Health reports session-cleanup feature (V0.3)" "FAIL" "$HEALTH"
+fi
+
+if echo "$HEALTH" | grep -q '"stats"'; then
+  log_test "Health includes store stats (V0.3)" "PASS"
+else
+  log_test "Health includes store stats (V0.3)" "FAIL" "$HEALTH"
 fi
 
 echo ""
@@ -354,6 +372,12 @@ else
   log_test "Store stats endpoint works" "FAIL" "$STATS"
 fi
 
+if echo "$STATS" | grep -q '"activeSessions"'; then
+  log_test "Store stats includes activeSessions (V0.3)" "PASS"
+else
+  log_test "Store stats includes activeSessions (V0.3)" "FAIL" "$STATS"
+fi
+
 echo ""
 
 # ═══ 15. Error Handling ═══
@@ -424,6 +448,9 @@ else
 fi
 
 # Save results
-echo "{\"passed\":$PASS,\"failed\":$FAIL,\"total\":$TOTAL,\"timestamp\":\"$(date -Iseconds)\"}" > /home/ubuntu/coachOS/test-results.json
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+RESULTS_FILE="$PROJECT_DIR/test-results.json"
+echo "{\"passed\":$PASS,\"failed\":$FAIL,\"total\":$TOTAL,\"version\":\"0.3.0\",\"timestamp\":\"$(date -Iseconds)\"}" > "$RESULTS_FILE"
 echo ""
-echo "Results saved to /home/ubuntu/coachOS/test-results.json"
+echo "Results saved to $RESULTS_FILE"

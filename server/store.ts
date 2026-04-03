@@ -1,6 +1,7 @@
 /**
- * CoachOS V0.2 — In-Memory Data Store
+ * CoachOS V0.3 — In-Memory Data Store
  * Centralized storage for sessions, recommendations, feedback, and audit logs.
+ * V0.3: Added session cleanup, audit log trimming, and memory management.
  * In production, this would be backed by a database (Prisma/PostgreSQL).
  */
 
@@ -82,6 +83,31 @@ export function getSessionsByUser(userId: string): CoachSession[] {
     }
   }
   return result.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/**
+ * V0.3: Cleanup inactive sessions older than maxAge (milliseconds).
+ * Returns the number of sessions removed.
+ */
+export function cleanupInactiveSessions(maxAge: number): number {
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [id, session] of Array.from(sessions.entries())) {
+    if (!session.isActive && (now - session.updatedAt) > maxAge) {
+      sessions.delete(id);
+      cleaned++;
+    }
+    // Also clean active sessions that haven't been updated in a very long time
+    if (session.isActive && (now - session.updatedAt) > maxAge * 2) {
+      sessions.delete(id);
+      cleaned++;
+    }
+  }
+
+  // Trim audit logs if they exceed 10000 entries
+  trimAuditLogs(10000);
+
+  return cleaned;
 }
 
 /* ═══ Recommendation Store ═══ */
@@ -202,10 +228,21 @@ export function getAuditLogs(filters?: {
   return result;
 }
 
+/**
+ * V0.3: Trim audit logs to keep only the most recent entries.
+ */
+function trimAuditLogs(maxEntries: number): void {
+  if (auditLogs.length > maxEntries) {
+    const excess = auditLogs.length - maxEntries;
+    auditLogs.splice(0, excess);
+  }
+}
+
 /* ═══ Stats ═══ */
 export function getStoreStats() {
   return {
     sessions: sessions.size,
+    activeSessions: Array.from(sessions.values()).filter((s) => s.isActive).length,
     recommendations: recommendations.size,
     feedbacks: feedbacks.size,
     returnEvents: returnEvents.size,

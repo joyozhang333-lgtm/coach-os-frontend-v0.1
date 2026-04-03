@@ -252,9 +252,11 @@ router.post("/respond", (req: Request, res: Response) => {
     // Update recommendation status
     const newStatus = (action === "open_specialist_ai" || action === "open_human_coach")
       ? "accepted"
-      : (action === "dismiss_once" || action === "suppress_for_session")
+      : action === "suppress_for_session"
+      ? "suppressed"
+      : action === "dismiss_once"
       ? "dismissed"
-      : "suppressed";
+      : "dismissed";
 
     updateRecommendation(recommendationId, {
       status: newStatus,
