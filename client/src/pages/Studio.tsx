@@ -43,7 +43,7 @@ const STATUS_CONFIG: Record<CoachStatus, { label: string; color: string; bg: str
 const MY_COACHES = [
   {
     id: "1",
-    name: "晨光引导师",
+    name: "晨间正念引导",
     desc: "专注于晨间正念和日记引导的 AI 教练",
     status: "published" as CoachStatus,
     sessions: 856,
@@ -128,7 +128,7 @@ export default function Studio() {
                 <label className="text-xs text-muted-foreground block mb-1.5">教练名称</label>
                 <input
                   type="text"
-                  placeholder="例如：晨光引导师"
+                  placeholder="例如：晨间正念引导"
                   className="w-full h-10 px-3 rounded-lg bg-secondary border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
                 />
               </div>

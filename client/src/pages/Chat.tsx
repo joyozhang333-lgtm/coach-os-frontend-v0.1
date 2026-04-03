@@ -26,60 +26,60 @@ import AppLayout from "@/components/AppLayout";
 /* ═══ Data: 4 AI Coaches ═══ */
 const AI_COACHES = [
   {
-    id: "serenity",
-    name: "安宁心",
-    nameEn: "Serenity",
-    specialty: "情绪调节 · 正念冥想",
-    method: "正念引导 · 情绪调节技术",
+    id: "siyu",
+    name: "陈思雨",
+    nameEn: "Siyu Chen",
+    specialty: "情绪调节 · 正念引导",
+    method: "正念引导 · 认知行为技术",
     avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663494351292/UiPe44g7XsskFqpdXViubX/coach-avatar-serenity_d6e7dd08.png",
-    greeting: "你好，我是安宁心。今天想聊些什么？无论是什么，我都在这里陪伴你。",
+    greeting: "你好，我是思雨。今天想聊些什么？无论是什么，我都在这里陪伴你。",
     tags: ["正念", "情绪", "冥想", "焦虑缓解"],
     sessions: "3.2K",
     rating: 4.9,
     color: "amber",
-    bio: "擅长帮助用户觉察情绪模式，通过正念引导和情绪调节技术找到内心的平静。专注于焦虑缓解、压力管理和日常正念练习。",
+    bio: "国家二级心理咨询师背景，擅长帮助来访者觉察情绪模式。通过正念引导和认知行为技术，陪伴你找到内心的平静。",
   },
   {
-    id: "mirror",
-    name: "明镜台",
-    nameEn: "Mirror",
+    id: "zimo",
+    name: "林子墨",
+    nameEn: "Zimo Lin",
     specialty: "自我探索 · 深度觉察",
-    method: "深度觉察 · 信念探索",
+    method: "精神动力学 · 信念探索",
     avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663494351292/UiPe44g7XsskFqpdXViubX/coach-avatar-mirror_70c8e3dc.png",
-    greeting: "你好，我是明镜台。今天想看见哪个部分的自己？让我们一起探索。",
+    greeting: "你好，我是子墨。今天想看见哪个部分的自己？让我们一起探索。",
     tags: ["觉察", "探索", "信念", "内在小孩"],
     sessions: "2.8K",
     rating: 4.8,
     color: "teal",
-    bio: "引导你看见真实的自己。通过深度对话，帮助你理解行为模式背后的信念系统，发现内在小孩的需求。",
+    bio: "心理学硕士，专注于精神动力学方向。善于引导你看见行为模式背后的信念系统，发现内在真实的需求。",
   },
   {
-    id: "warmth",
-    name: "暖光",
-    nameEn: "Warmth",
+    id: "xiaowei",
+    name: "张晓薇",
+    nameEn: "Xiaowei Zhang",
     specialty: "亲密关系 · 沟通表达",
-    method: "沟通表达 · 边界设立",
+    method: "家庭治疗 · 依恋理论",
     avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663494351292/UiPe44g7XsskFqpdXViubX/coach-avatar-warmth_c1d7e79c.png",
-    greeting: "你好，我是暖光。今天想聊聊什么关系中的事情吗？我在这里倾听。",
+    greeting: "你好，我是晓薇。今天想聊聊什么关系中的事情吗？我在这里倾听。",
     tags: ["关系", "沟通", "边界", "依恋"],
     sessions: "1.9K",
     rating: 4.7,
     color: "rose",
-    bio: "陪伴你改善关系中的沟通模式，学会表达需求和设立健康的边界。专注于亲密关系、家庭关系和依恋模式。",
+    bio: "家庭治疗师背景，专注于依恋理论和沟通模式。陪伴你改善关系中的表达方式，学会设立健康的边界。",
   },
   {
-    id: "infinity",
-    name: "无限环",
-    nameEn: "Infinity",
+    id: "haoran",
+    name: "王浩然",
+    nameEn: "Haoran Wang",
     specialty: "职业发展 · 决策支持",
-    method: "决策支持 · 目标规划",
+    method: "组织心理学 · 决策框架",
     avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663494351292/UiPe44g7XsskFqpdXViubX/coach-avatar-infinity_c1656b18.png",
-    greeting: "你好，我是无限环。今天想聊聊职业上的什么话题？让我们一起理清思路。",
+    greeting: "你好，我是浩然。今天想聊聊职业上的什么话题？让我们一起理清思路。",
     tags: ["职业", "决策", "目标", "领导力"],
     sessions: "2.1K",
     rating: 4.9,
     color: "violet",
-    bio: "帮助你在职业十字路口做出清晰的决策，找到内在驱动力。专注于职业规划、领导力发展和决策框架。",
+    bio: "组织心理学博士，曾任企业高管教练。帮助你在职业十字路口理清思路，找到内在驱动力和行动方向。",
   },
 ];
 
@@ -122,25 +122,25 @@ const COUNSELORS = [
 
 /* ═══ Demo Replies ═══ */
 const DEMO_REPLIES: Record<string, string[]> = {
-  serenity: [
+  siyu: [
     "我听到你了。能再多说一些吗？是什么让你有这样的感受？",
     "让我们先做一个简单的呼吸练习。吸气四秒，屏住四秒，呼气六秒。准备好了吗？",
     "这是一个很有勇气的觉察。当你注意到这个模式时，身体有什么感觉？",
     "你提到的焦虑感，它像什么？如果给它一个颜色和形状，会是什么样的？",
   ],
-  mirror: [
+  zimo: [
     "有意思。你刚才说的这个「应该」，是谁的声音？是你自己的，还是别人的？",
     "让我们慢下来看看这个模式。你第一次注意到自己有这样的反应是什么时候？",
     "你提到的这个场景让我想到——也许在那个瞬间，你需要的不是解决方案，而是被看见。",
     "如果你的内在小孩现在站在你面前，ta 想对你说什么？",
   ],
-  warmth: [
+  xiaowei: [
     "在这段关系中，你最想被理解的是什么？",
     "你说「我不知道怎么开口」——如果没有任何后果，你最想对 ta 说什么？",
     "边界不是墙，而是一扇门。你可以选择什么时候打开，什么时候关上。",
     "你有没有注意到，每次你退让的时候，身体会有什么反应？",
   ],
-  infinity: [
+  haoran: [
     "让我们用一个框架来理清这个决策。你最看重的三个因素是什么？",
     "如果五年后的你回头看今天的选择，你觉得 ta 会怎么说？",
     "你提到了「不确定」——不确定本身不是问题，问题是我们如何与不确定共处。",
@@ -237,7 +237,7 @@ export default function Chat() {
     setMessageCount((c) => c + 1);
 
     setTimeout(() => {
-      const replies = DEMO_REPLIES[activeCoach.id] || DEMO_REPLIES.serenity;
+      const replies = DEMO_REPLIES[activeCoach.id] || DEMO_REPLIES.siyu;
       const reply: Message = {
         id: (Date.now() + 1).toString(),
         role: "coach",

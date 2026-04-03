@@ -47,11 +47,11 @@ const EMOTION_TAGS = [
 ];
 
 const TIMELINE = [
-  { date: "2026-04-01", title: "觉察到回避模式", desc: "在与明镜台的对话中，第一次清晰地看到了自己在冲突中的回避模式。", coach: "明镜台", emotion: "觉察", type: "breakthrough" as const },
-  { date: "2026-03-28", title: "完成 7 天正念挑战", desc: "连续 7 天完成晨间正念练习，焦虑指数下降 15%。", coach: "安宁心", emotion: "平静", type: "milestone" as const },
-  { date: "2026-03-25", title: "第一次表达边界", desc: "在暖光的引导下，第一次在关系中清晰地表达了自己的边界。", coach: "暖光", emotion: "勇气", type: "breakthrough" as const },
-  { date: "2026-03-20", title: "职业方向梳理", desc: "与无限环完成了职业价值观排序，明确了未来 3 年的发展方向。", coach: "无限环", emotion: "清晰", type: "insight" as const },
-  { date: "2026-03-15", title: "开始 CoachOS 旅程", desc: "注册 CoachOS，与安宁心进行了第一次深度对话。", coach: "安宁心", emotion: "期待", type: "milestone" as const },
+  { date: "2026-04-01", title: "觉察到回避模式", desc: "在与林子墨的对话中，第一次清晰地看到了自己在冲突中的回避模式。", coach: "林子墨", emotion: "觉察", type: "breakthrough" as const },
+  { date: "2026-03-28", title: "完成 7 天正念挑战", desc: "连续 7 天完成晨间正念练习，焦虑指数下降 15%。", coach: "陈思雨", emotion: "平静", type: "milestone" as const },
+  { date: "2026-03-25", title: "第一次表达边界", desc: "在张晓薇的引导下，第一次在关系中清晰地表达了自己的边界。", coach: "张晓薇", emotion: "勇气", type: "breakthrough" as const },
+  { date: "2026-03-20", title: "职业方向梳理", desc: "与王浩然完成了职业价值观排序，明确了未来 3 年的发展方向。", coach: "王浩然", emotion: "清晰", type: "insight" as const },
+  { date: "2026-03-15", title: "开始 CoachOS 旅程", desc: "注册 CoachOS，与陈思雨进行了第一次深度对话。", coach: "陈思雨", emotion: "期待", type: "milestone" as const },
 ];
 
 const TYPE_COLORS: Record<string, string> = {
@@ -264,7 +264,7 @@ export default function Insights() {
                 </div>
                 <div className="space-y-3">
                   {[
-                    "尝试与明镜台进行更深层的信念探索",
+                    "尝试与林子墨进行更深层的信念探索",
                     "将正念练习时间从 10 分钟延长到 15 分钟",
                     "记录每次觉察的具体触发场景",
                     "探索与「完美主义」相关的核心信念",
@@ -286,10 +286,10 @@ export default function Insights() {
               </div>
               <div className="space-y-3">
                 {[
-                  { name: "安宁心", sessions: 18, percent: 38, color: "bg-amber-400" },
-                  { name: "明镜台", sessions: 14, percent: 30, color: "bg-teal-400" },
-                  { name: "暖光", sessions: 9, percent: 19, color: "bg-rose-400" },
-                  { name: "无限环", sessions: 6, percent: 13, color: "bg-violet-400" },
+                  { name: "陈思雨", sessions: 18, percent: 38, color: "bg-amber-400" },
+                  { name: "林子墨", sessions: 14, percent: 30, color: "bg-teal-400" },
+                  { name: "张晓薇", sessions: 9, percent: 19, color: "bg-rose-400" },
+                  { name: "王浩然", sessions: 6, percent: 13, color: "bg-violet-400" },
                 ].map((c) => (
                   <div key={c.name} className="flex items-center gap-3">
                     <span className="text-xs w-16 shrink-0">{c.name}</span>

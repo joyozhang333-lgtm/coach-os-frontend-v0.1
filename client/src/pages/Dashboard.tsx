@@ -30,9 +30,9 @@ const fadeUp = {
 };
 
 const RECENT_SESSIONS = [
-  { coach: "安宁心", topic: "关于最近的工作压力", time: "2 小时前", emotion: "平静", avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663494351292/UiPe44g7XsskFqpdXViubX/coach-avatar-serenity_d6e7dd08.png" },
-  { coach: "明镜台", topic: "探索内在的回避模式", time: "昨天", emotion: "觉察", avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663494351292/UiPe44g7XsskFqpdXViubX/coach-avatar-mirror_70c8e3dc.png" },
-  { coach: "暖光", topic: "和朋友的沟通困境", time: "3 天前", emotion: "成长", avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663494351292/UiPe44g7XsskFqpdXViubX/coach-avatar-warmth_c1d7e79c.png" },
+  { coach: "陈思雨", topic: "关于最近的工作压力", time: "2 小时前", emotion: "平静", avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663494351292/UiPe44g7XsskFqpdXViubX/coach-avatar-serenity_d6e7dd08.png" },
+  { coach: "林子墨", topic: "探索内在的回避模式", time: "昨天", emotion: "觉察", avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663494351292/UiPe44g7XsskFqpdXViubX/coach-avatar-mirror_70c8e3dc.png" },
+  { coach: "张晓薇", topic: "和朋友的沟通困境", time: "3 天前", emotion: "成长", avatar: "https://d2xsxph8kpxj0f.cloudfront.net/310519663494351292/UiPe44g7XsskFqpdXViubX/coach-avatar-warmth_c1d7e79c.png" },
 ];
 
 const QUICK_ACTIONS = [
@@ -207,7 +207,7 @@ export default function Dashboard() {
                 <div className="flex items-center gap-3">
                   <div className="w-1 h-8 rounded-full bg-emerald-400/60" />
                   <div>
-                    <span className="text-xs font-medium block">与安宁心的预约对话</span>
+                    <span className="text-xs font-medium block">与陈思雨的预约对话</span>
                     <span className="text-[10px] text-muted-foreground">02:00 PM</span>
                   </div>
                 </div>
