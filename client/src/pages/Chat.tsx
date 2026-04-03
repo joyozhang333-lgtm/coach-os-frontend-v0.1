@@ -2,6 +2,7 @@
  * Design: Architectural Dark Theater × Line System
  * Chat — Core feature: AI Coach switching + Counselor recommendation
  * Left: Coach list panel | Center: Chat | Right: Coach info + Recommendations
+ * Now integrated with real AI via OpenAI streaming API
  */
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "wouter";
@@ -19,9 +20,11 @@ import {
   Zap,
   X,
   UserPlus,
+  Loader2,
 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import AppLayout from "@/components/AppLayout";
+import { chatStream, analyzeTopicAPI, getRecommendations } from "@/lib/api";
 
 /* ═══ Data: 4 AI Coaches ═══ */
 const AI_COACHES = [
@@ -83,15 +86,28 @@ const AI_COACHES = [
   },
 ];
 
-/* ═══ Data: Real Counselors (recommended based on topic match) ═══ */
-const COUNSELORS = [
+interface Counselor {
+  id: string;
+  name: string;
+  title: string;
+  specialty: string;
+  avatar: string;
+  matchScore: number;
+  matchReason?: string;
+  experience: string;
+  price: string;
+  available: boolean;
+}
+
+// Default counselors (shown before AI analysis)
+const DEFAULT_COUNSELORS: Counselor[] = [
   {
     id: "c1",
     name: "李心怡",
     title: "国家二级心理咨询师",
     specialty: "情绪管理 · CBT",
     avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&h=200&fit=crop&crop=face",
-    matchScore: 96,
+    matchScore: 0,
     experience: "8 年",
     price: "¥300/次",
     available: true,
@@ -102,7 +118,7 @@ const COUNSELORS = [
     title: "心理学博士 · 督导师",
     specialty: "深度分析 · 精神动力",
     avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face",
-    matchScore: 91,
+    matchScore: 0,
     experience: "12 年",
     price: "¥500/次",
     available: true,
@@ -113,40 +129,12 @@ const COUNSELORS = [
     title: "家庭治疗师",
     specialty: "家庭系统 · 关系修复",
     avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&h=200&fit=crop&crop=face",
-    matchScore: 87,
+    matchScore: 0,
     experience: "6 年",
     price: "¥280/次",
     available: false,
   },
 ];
-
-/* ═══ Demo Replies ═══ */
-const DEMO_REPLIES: Record<string, string[]> = {
-  siyu: [
-    "我听到你了。能再多说一些吗？是什么让你有这样的感受？",
-    "让我们先做一个简单的呼吸练习。吸气四秒，屏住四秒，呼气六秒。准备好了吗？",
-    "这是一个很有勇气的觉察。当你注意到这个模式时，身体有什么感觉？",
-    "你提到的焦虑感，它像什么？如果给它一个颜色和形状，会是什么样的？",
-  ],
-  zimo: [
-    "有意思。你刚才说的这个「应该」，是谁的声音？是你自己的，还是别人的？",
-    "让我们慢下来看看这个模式。你第一次注意到自己有这样的反应是什么时候？",
-    "你提到的这个场景让我想到——也许在那个瞬间，你需要的不是解决方案，而是被看见。",
-    "如果你的内在小孩现在站在你面前，ta 想对你说什么？",
-  ],
-  xiaowei: [
-    "在这段关系中，你最想被理解的是什么？",
-    "你说「我不知道怎么开口」——如果没有任何后果，你最想对 ta 说什么？",
-    "边界不是墙，而是一扇门。你可以选择什么时候打开，什么时候关上。",
-    "你有没有注意到，每次你退让的时候，身体会有什么反应？",
-  ],
-  haoran: [
-    "让我们用一个框架来理清这个决策。你最看重的三个因素是什么？",
-    "如果五年后的你回头看今天的选择，你觉得 ta 会怎么说？",
-    "你提到了「不确定」——不确定本身不是问题，问题是我们如何与不确定共处。",
-    "在你过去做过的最好的决策中，你是怎么做到的？那次的感觉是什么样的？",
-  ],
-};
 
 interface Message {
   id: string;
@@ -187,9 +175,12 @@ export default function Chat() {
   const [showRightPanel, setShowRightPanel] = useState(true);
   const [showRecommendation, setShowRecommendation] = useState(false);
   const [messageCount, setMessageCount] = useState(0);
+  const [sessionId, setSessionId] = useState<string | undefined>();
+  const [counselors, setCounselors] = useState<Counselor[]>(DEFAULT_COUNSELORS);
+  const [isLoadingRec, setIsLoadingRec] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const replyIndex = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -197,12 +188,48 @@ export default function Chat() {
     }
   }, [messages, isTyping]);
 
-  // Show counselor recommendation after 3 messages
+  // Trigger counselor recommendation after 3 user messages
   useEffect(() => {
     if (messageCount >= 3 && !showRecommendation) {
       setShowRecommendation(true);
+      fetchRecommendations();
     }
   }, [messageCount, showRecommendation]);
+
+  const fetchRecommendations = useCallback(async () => {
+    setIsLoadingRec(true);
+    try {
+      // First analyze the topic
+      const chatHistory = messages
+        .filter((m) => m.role === "user" || m.role === "coach")
+        .map((m) => ({
+          role: m.role === "user" ? "user" : "assistant",
+          content: m.content,
+        }));
+
+      const analysis = await analyzeTopicAPI(chatHistory);
+
+      // Then get recommendations
+      const result = await getRecommendations({
+        topic: analysis.topic,
+        emotion: analysis.emotion,
+        keywords: analysis.keywords,
+        messages: chatHistory,
+      });
+
+      if (result.recommendations && result.recommendations.length > 0) {
+        setCounselors(result.recommendations.slice(0, 3));
+      }
+    } catch (error) {
+      console.error("Failed to fetch recommendations:", error);
+      // Keep default counselors with placeholder scores
+      setCounselors(
+        DEFAULT_COUNSELORS.map((c, i) => ({ ...c, matchScore: 90 - i * 5 }))
+      );
+    } finally {
+      setIsLoadingRec(false);
+    }
+  }, [messages]);
 
   const switchCoach = useCallback(
     (coach: typeof AI_COACHES[0]) => {
@@ -216,14 +243,18 @@ export default function Chat() {
         coachId: coach.id,
       };
       setMessages((prev) => [...prev, switchMsg]);
-      replyIndex.current = 0;
     },
     [activeCoach.id]
   );
 
-  const handleSend = () => {
+  const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || isTyping) return;
+
+    // Cancel any ongoing stream
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -236,20 +267,68 @@ export default function Chat() {
     setIsTyping(true);
     setMessageCount((c) => c + 1);
 
-    setTimeout(() => {
-      const replies = DEMO_REPLIES[activeCoach.id] || DEMO_REPLIES.siyu;
-      const reply: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "coach",
-        content: replies[replyIndex.current % replies.length],
-        time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+    // Create a placeholder for the streaming response
+    const assistantMsgId = (Date.now() + 1).toString();
+    const assistantMsg: Message = {
+      id: assistantMsgId,
+      role: "coach",
+      content: "",
+      time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+      coachId: activeCoach.id,
+    };
+    setMessages((prev) => [...prev, assistantMsg]);
+
+    try {
+      // Build history for API
+      const history = messages
+        .filter((m) => m.role === "user" || m.role === "coach")
+        .slice(-18)
+        .map((m) => ({
+          role: m.role === "user" ? "user" : "assistant",
+          content: m.content,
+        }));
+      history.push({ role: "user", content: text });
+
+      // Stream the response
+      for await (const event of chatStream({
         coachId: activeCoach.id,
-      };
-      replyIndex.current++;
-      setMessages((prev) => [...prev, reply]);
+        message: text,
+        sessionId,
+        history,
+      })) {
+        if (event.type === "content") {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? { ...m, content: m.content + event.content }
+                : m
+            )
+          );
+        } else if (event.type === "done") {
+          setSessionId(event.sessionId);
+        } else if (event.type === "error") {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? { ...m, content: event.error || "抱歉，我暂时无法回复。请稍后再试。" }
+                : m
+            )
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Chat error:", error);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? { ...m, content: "抱歉，连接出现了问题。请稍后再试。" }
+            : m
+        )
+      );
+    } finally {
       setIsTyping(false);
-    }, 1200 + Math.random() * 800);
-  };
+    }
+  }, [input, isTyping, activeCoach, sessionId, messages]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -312,13 +391,13 @@ export default function Chat() {
               <div className="border-t border-border" />
             </div>
 
-            {/* Real Counselors Section */}
+            {/* Real Counselors in sidebar */}
             <div className="px-1">
               <div className="flex items-center gap-1.5 mb-2">
                 <Users size={12} className="text-muted-foreground" />
                 <span className="text-[10px] text-muted-foreground font-medium tracking-wide uppercase">真人咨询师</span>
               </div>
-              {COUNSELORS.slice(0, 2).map((counselor) => (
+              {counselors.slice(0, 2).map((counselor) => (
                 <button
                   key={counselor.id}
                   className="w-full text-left p-3 rounded-lg hover:bg-secondary/50 transition-all border border-transparent group"
@@ -335,10 +414,12 @@ export default function Chat() {
                       <span className="text-xs font-medium block">{counselor.name}</span>
                       <span className="text-[10px] text-muted-foreground truncate block">{counselor.specialty}</span>
                     </div>
-                    <div className="text-right shrink-0">
-                      <span className="text-[10px] text-emerald-400 font-mono block">{counselor.matchScore}%</span>
-                      <span className="text-[9px] text-muted-foreground">匹配</span>
-                    </div>
+                    {counselor.matchScore > 0 && (
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] text-emerald-400 font-mono block">{counselor.matchScore}%</span>
+                        <span className="text-[9px] text-muted-foreground">匹配</span>
+                      </div>
+                    )}
                   </div>
                 </button>
               ))}
@@ -394,9 +475,10 @@ export default function Chat() {
                 <button
                   onClick={() => {
                     setMessages([{ id: "1", role: "coach", content: activeCoach.greeting, time: "刚刚", coachId: activeCoach.id }]);
-                    replyIndex.current = 0;
                     setMessageCount(0);
                     setShowRecommendation(false);
+                    setSessionId(undefined);
+                    setCounselors(DEFAULT_COUNSELORS);
                   }}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-secondary"
                 >
@@ -440,7 +522,12 @@ export default function Chat() {
                               : "bg-secondary text-foreground rounded-bl-md"
                           }`}
                         >
-                          {msg.content}
+                          {msg.content || (
+                            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                              <Loader2 size={12} className="animate-spin" />
+                              思考中...
+                            </span>
+                          )}
                         </div>
                         <span className={`text-[10px] text-muted-foreground mt-1 block ${msg.role === "user" ? "text-right" : ""}`}>
                           {msg.time}
@@ -453,7 +540,7 @@ export default function Chat() {
 
               {/* Typing indicator */}
               <AnimatePresence>
-                {isTyping && (
+                {isTyping && messages[messages.length - 1]?.content !== "" && (
                   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex gap-3">
                     <img src={activeCoach.avatar} alt="" className="w-7 h-7 rounded-full object-cover ring-1 ring-border shrink-0 mt-1" />
                     <div className="bg-secondary rounded-2xl rounded-bl-md px-4 py-3 flex items-center gap-1.5">
@@ -489,10 +576,13 @@ export default function Chat() {
                       </button>
                       <div className="flex items-center gap-2 mb-3">
                         <Zap size={14} className="text-primary" />
-                        <span className="text-xs font-medium">基于你的对话内容，为你推荐匹配的咨询师</span>
+                        <span className="text-xs font-medium">
+                          {isLoadingRec ? "正在分析对话内容..." : "基于你的对话内容，为你推荐匹配的咨询师"}
+                        </span>
+                        {isLoadingRec && <Loader2 size={12} className="animate-spin text-primary" />}
                       </div>
                       <div className="space-y-2">
-                        {COUNSELORS.map((c) => (
+                        {counselors.map((c) => (
                           <div key={c.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-secondary/50 transition-colors">
                             <img src={c.avatar} alt={c.name} className="w-8 h-8 rounded-full object-cover ring-1 ring-border" />
                             <div className="flex-1 min-w-0">
@@ -500,17 +590,25 @@ export default function Chat() {
                                 <span className="text-xs font-medium">{c.name}</span>
                                 <span className="text-[9px] text-muted-foreground">{c.title}</span>
                               </div>
-                              <span className="text-[10px] text-muted-foreground">{c.specialty} · {c.experience}</span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {c.matchReason || `${c.specialty} · ${c.experience}`}
+                              </span>
                             </div>
                             <div className="text-right shrink-0">
-                              <div className="text-xs text-emerald-400 font-mono font-medium">{c.matchScore}%</div>
-                              <span className="text-[9px] text-muted-foreground">{c.price}</span>
+                              {c.matchScore > 0 ? (
+                                <>
+                                  <div className="text-xs text-emerald-400 font-mono font-medium">{c.matchScore}%</div>
+                                  <span className="text-[9px] text-muted-foreground">{c.price}</span>
+                                </>
+                              ) : (
+                                <Loader2 size={12} className="animate-spin text-muted-foreground" />
+                              )}
                             </div>
                           </div>
                         ))}
                       </div>
                       <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
-                        <span className="text-[10px] text-muted-foreground">匹配度基于对话主题和情绪状态计算</span>
+                        <span className="text-[10px] text-muted-foreground">匹配度基于 AI 分析对话主题和情绪状态计算</span>
                         <Link href="/marketplace" className="text-[10px] text-primary hover:underline underline-offset-2 flex items-center gap-1">
                           查看更多 <ArrowRight size={8} />
                         </Link>
@@ -662,14 +760,16 @@ export default function Chat() {
                     <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">推荐咨询师</h4>
                   </div>
                   <div className="space-y-2">
-                    {COUNSELORS.map((c) => (
+                    {counselors.map((c) => (
                       <div key={c.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-secondary/50 transition-colors">
                         <img src={c.avatar} alt={c.name} className="w-7 h-7 rounded-full object-cover ring-1 ring-border" />
                         <div className="flex-1 min-w-0">
                           <span className="text-xs font-medium block">{c.name}</span>
                           <span className="text-[10px] text-muted-foreground">{c.specialty}</span>
                         </div>
-                        <span className="text-[10px] text-emerald-400 font-mono">{c.matchScore}%</span>
+                        {c.matchScore > 0 && (
+                          <span className="text-[10px] text-emerald-400 font-mono">{c.matchScore}%</span>
+                        )}
                       </div>
                     ))}
                   </div>

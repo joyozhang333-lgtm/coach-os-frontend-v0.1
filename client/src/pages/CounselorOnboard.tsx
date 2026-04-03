@@ -1,7 +1,8 @@
 /*
  * Design: Architectural Dark Theater × Line System
  * CounselorOnboard — Counselor style cloning system
- * Step 1: Welcome & intro → Step 2: 15-min conversation → Step 3: Style analysis report
+ * Step 1: Welcome & intro → Step 2: 30-min conversation → Step 3: Style analysis report
+ * Now integrated with real AI style analysis via backend API
  */
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "wouter";
@@ -24,12 +25,15 @@ import {
   Users,
   BookOpen,
   Award,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
+import { analyzeStyle } from "@/lib/api";
 
 /* ═══ System interview questions ═══ */
 const INTERVIEW_QUESTIONS = [
-  "欢迎来到 CoachOS 咨询师入驻系统！我是您的风格分析助手。接下来的 15 分钟，我会通过一系列对话来了解您的咨询风格。准备好了吗？",
+  "欢迎来到 CoachOS 咨询师入驻系统！我是您的风格分析助手。接下来的 30 分钟，我会通过一系列深度对话来全面了解您的咨询风格。准备好了吗？",
   "首先，请简单介绍一下您的专业背景和主要的咨询方向。",
   "当一个来访者第一次来到您面前，情绪很低落但不知道该说什么时，您通常会怎么开始？",
   "在咨询过程中，您更倾向于使用哪种理论取向？比如 CBT、精神动力、人本主义、叙事疗法等？",
@@ -42,18 +46,18 @@ const INTERVIEW_QUESTIONS = [
   "非常感谢您的分享！我已经收集了足够的信息来分析您的咨询风格。现在让我为您生成专业报告...",
 ];
 
-/* ═══ Style report data (demo) ═══ */
-const STYLE_REPORT = {
+/* ═══ Fallback style report (used when API fails) ═══ */
+const FALLBACK_REPORT = {
   overallStyle: "温暖共情型 · 整合取向",
   styleDescription:
     "您的咨询风格以温暖共情为核心基调，融合了人本主义的无条件积极关注和认知行为疗法的结构化引导。您善于在安全的关系中引导来访者探索内在世界，同时提供实用的应对策略。",
   dimensions: [
-    { name: "共情能力", score: 92, description: "您展现出极高的共情能力，能够精准捕捉来访者的情绪状态" },
-    { name: "引导技术", score: 85, description: "善于使用开放式提问和反映技术引导对话方向" },
-    { name: "理论整合", score: 88, description: "灵活运用多种理论取向，根据来访者需求调整策略" },
-    { name: "边界管理", score: 78, description: "在保持专业边界的同时展现适度的真诚和温暖" },
-    { name: "危机处理", score: 82, description: "面对强烈情绪时保持稳定，能有效容纳和转化" },
-    { name: "沉默运用", score: 75, description: "对沉默有一定的容忍度，但可以进一步发展沉默的治疗性运用" },
+    { name: "共情能力", score: 85, description: "展现出较高的共情能力" },
+    { name: "引导技术", score: 80, description: "善于使用开放式提问引导对话" },
+    { name: "理论整合", score: 78, description: "能够灵活运用不同理论取向" },
+    { name: "边界管理", score: 76, description: "保持了适当的专业边界" },
+    { name: "危机处理", score: 79, description: "面对情绪时保持稳定" },
+    { name: "沉默运用", score: 72, description: "可以进一步发展沉默的治疗性运用" },
   ],
   strengths: [
     "出色的情绪共鸣能力，来访者容易感到被理解和接纳",
@@ -61,13 +65,23 @@ const STYLE_REPORT = {
     "善于在安全的关系中引导深层探索",
   ],
   growthAreas: [
-    "可以尝试更多地运用沉默作为治疗工具，给来访者更多内在加工的空间",
+    "可以尝试更多地运用沉默作为治疗工具",
     "在面对阻抗时，可以探索更多元的介入方式",
-    "建议发展更系统的结案流程，帮助来访者巩固咨询成果",
+    "建议发展更系统的结案流程",
   ],
-  matchedCoachStyle: "安宁心 × 明镜台 融合型",
+  matchedCoachStyle: "陈思雨 × 林子墨 融合型",
   keywords: ["温暖", "共情", "整合", "引导", "安全感", "探索"],
 };
+
+interface StyleReport {
+  overallStyle: string;
+  styleDescription: string;
+  dimensions: Array<{ name: string; score: number; description: string }>;
+  strengths: string[];
+  growthAreas: string[];
+  matchedCoachStyle: string;
+  keywords: string[];
+}
 
 interface Message {
   id: string;
@@ -86,6 +100,9 @@ export default function CounselorOnboard() {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [styleReport, setStyleReport] = useState<StyleReport>(FALLBACK_REPORT);
+  const [analysisError, setAnalysisError] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -130,6 +147,50 @@ export default function CounselorOnboard() {
     setQuestionIndex(1);
   }, []);
 
+  // Call AI style analysis API
+  const runStyleAnalysis = useCallback(async (conversationMessages: Message[]) => {
+    setStep("analyzing");
+    setAnalysisError(false);
+    setAnalysisProgress(0);
+
+    // Animate progress
+    const progressInterval = setInterval(() => {
+      setAnalysisProgress((p) => {
+        if (p >= 90) {
+          clearInterval(progressInterval);
+          return 90;
+        }
+        return p + Math.random() * 15;
+      });
+    }, 500);
+
+    try {
+      // Format messages for the API
+      const apiMessages = conversationMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      const report = await analyzeStyle(apiMessages);
+
+      // Validate the report has required fields
+      if (report && report.overallStyle && report.dimensions) {
+        setStyleReport(report);
+      } else {
+        setStyleReport(FALLBACK_REPORT);
+      }
+    } catch (error) {
+      console.error("Style analysis failed:", error);
+      setAnalysisError(true);
+      setStyleReport(FALLBACK_REPORT);
+    } finally {
+      clearInterval(progressInterval);
+      setAnalysisProgress(100);
+      // Short delay for progress animation to complete
+      setTimeout(() => setStep("report"), 800);
+    }
+  }, []);
+
   const handleSend = () => {
     const text = input.trim();
     if (!text || isTyping) return;
@@ -146,11 +207,11 @@ export default function CounselorOnboard() {
 
     setTimeout(() => {
       if (questionIndex >= INTERVIEW_QUESTIONS.length) {
-        // Analysis phase
+        // Analysis phase — call real AI
         setIsTimerRunning(false);
         setIsTyping(false);
-        setStep("analyzing");
-        setTimeout(() => setStep("report"), 3000);
+        const allMessages = [...messages, userMsg];
+        runStyleAnalysis(allMessages);
         return;
       }
 
@@ -198,17 +259,17 @@ export default function CounselorOnboard() {
                   咨询师风格<span className="text-gradient">复制系统</span>
                 </h1>
                 <p className="text-muted-foreground text-lg mb-3 max-w-lg mx-auto leading-relaxed">
-                  通过 15 分钟的深度对话，我们将分析并复制您独特的咨询风格，创建属于您的 AI 教练分身。
+                  通过 30 分钟的深度对话，我们将分析并复制您独特的咨询风格，创建属于您的 AI 教练分身。
                 </p>
                 <p className="text-muted-foreground text-sm mb-10 max-w-md mx-auto">
-                  对话结束后，您将收到一份详细的咨询风格分析报告，包含专业性建议。
+                  对话结束后，AI 将实时生成一份详细的咨询风格分析报告，包含专业性建议。
                 </p>
 
                 <div className="grid sm:grid-cols-3 gap-4 mb-10 max-w-lg mx-auto">
                   {[
-                    { icon: MessageCircle, label: "15 分钟对话", desc: "深度风格采集" },
-                    { icon: Brain, label: "AI 风格分析", desc: "多维度评估" },
-                    { icon: FileText, label: "专业报告", desc: "成长建议" },
+                    { icon: MessageCircle, label: "30 分钟对话", desc: "深度风格采集" },
+                    { icon: Brain, label: "AI 风格分析", desc: "GPT-4 多维评估" },
+                    { icon: FileText, label: "专业报告", desc: "个性化成长建议" },
                   ].map((item, i) => (
                     <motion.div
                       key={item.label}
@@ -274,10 +335,10 @@ export default function CounselorOnboard() {
                   {/* Timer */}
                   <div className="flex items-center gap-1.5 text-sm font-mono">
                     <Clock size={14} className="text-primary" />
-                    <span className={elapsedSeconds >= 900 ? "text-primary" : "text-foreground"}>
+                    <span className={elapsedSeconds >= 1800 ? "text-primary" : "text-foreground"}>
                       {formatTime(elapsedSeconds)}
                     </span>
-                    <span className="text-muted-foreground text-xs">/ 15:00</span>
+                    <span className="text-muted-foreground text-xs">/ 30:00</span>
                   </div>
                   {/* Progress */}
                   <div className="hidden sm:flex items-center gap-2">
@@ -406,15 +467,18 @@ export default function CounselorOnboard() {
                 <Brain size={24} className="text-black" />
               </motion.div>
               <h2 className="text-xl font-bold mb-2">正在分析您的咨询风格</h2>
-              <p className="text-sm text-muted-foreground">AI 正在处理对话数据，生成专业报告...</p>
-              <div className="mt-6 w-48 h-1.5 rounded-full bg-secondary mx-auto overflow-hidden">
+              <p className="text-sm text-muted-foreground mb-2">AI 正在深度分析对话数据，生成专业报告...</p>
+              <p className="text-[10px] text-muted-foreground mb-6">
+                分析维度：共情能力 · 引导技术 · 理论整合 · 边界管理 · 危机处理 · 沉默运用
+              </p>
+              <div className="mt-4 w-48 h-1.5 rounded-full bg-secondary mx-auto overflow-hidden">
                 <motion.div
                   className="h-full bg-primary rounded-full"
-                  initial={{ width: "0%" }}
-                  animate={{ width: "100%" }}
-                  transition={{ duration: 3, ease: "easeInOut" }}
+                  animate={{ width: `${Math.min(analysisProgress, 100)}%` }}
+                  transition={{ duration: 0.3 }}
                 />
               </div>
+              <p className="text-[10px] text-muted-foreground mt-2">{Math.round(Math.min(analysisProgress, 100))}%</p>
             </div>
           </motion.div>
         )}
@@ -438,6 +502,12 @@ export default function CounselorOnboard() {
                   <CheckCircle2 size={12} />
                   风格分析完成
                 </div>
+                {analysisError && (
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-amber-400/30 bg-amber-400/5 text-xs text-amber-400 mb-4 ml-2">
+                    <AlertCircle size={12} />
+                    使用默认分析（AI 服务暂时不可用）
+                  </div>
+                )}
                 <h1 className="text-3xl lg:text-4xl font-bold tracking-tight mb-3">
                   您的咨询风格<span className="text-gradient">分析报告</span>
                 </h1>
@@ -457,10 +527,10 @@ export default function CounselorOnboard() {
                   <Sparkles size={16} className="text-primary" />
                   <h2 className="text-lg font-semibold">整体风格</h2>
                 </div>
-                <div className="text-2xl font-bold text-gradient mb-3">{STYLE_REPORT.overallStyle}</div>
-                <p className="text-sm text-muted-foreground leading-relaxed">{STYLE_REPORT.styleDescription}</p>
+                <div className="text-2xl font-bold text-gradient mb-3">{styleReport.overallStyle}</div>
+                <p className="text-sm text-muted-foreground leading-relaxed">{styleReport.styleDescription}</p>
                 <div className="flex flex-wrap gap-2 mt-4">
-                  {STYLE_REPORT.keywords.map((kw) => (
+                  {styleReport.keywords.map((kw) => (
                     <span key={kw} className="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary">
                       {kw}
                     </span>
@@ -480,7 +550,7 @@ export default function CounselorOnboard() {
                   <h2 className="text-lg font-semibold">多维度评估</h2>
                 </div>
                 <div className="space-y-5">
-                  {STYLE_REPORT.dimensions.map((dim, i) => (
+                  {styleReport.dimensions.map((dim, i) => (
                     <motion.div
                       key={dim.name}
                       initial={{ opacity: 0, x: -20 }}
@@ -518,7 +588,7 @@ export default function CounselorOnboard() {
                     <h2 className="text-base font-semibold">核心优势</h2>
                   </div>
                   <div className="space-y-3">
-                    {STYLE_REPORT.strengths.map((s, i) => (
+                    {styleReport.strengths.map((s, i) => (
                       <div key={i} className="flex gap-3">
                         <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
                         <p className="text-sm text-muted-foreground leading-relaxed">{s}</p>
@@ -538,7 +608,7 @@ export default function CounselorOnboard() {
                     <h2 className="text-base font-semibold">成长方向</h2>
                   </div>
                   <div className="space-y-3">
-                    {STYLE_REPORT.growthAreas.map((g, i) => (
+                    {styleReport.growthAreas.map((g, i) => (
                       <div key={i} className="flex gap-3">
                         <ArrowRight size={14} className="text-amber-400 shrink-0 mt-0.5" />
                         <p className="text-sm text-muted-foreground leading-relaxed">{g}</p>
@@ -563,7 +633,7 @@ export default function CounselorOnboard() {
                   基于您的咨询风格分析，我们已为您创建了 AI 教练分身。您的风格最接近：
                 </p>
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20">
-                  <span className="text-base font-semibold text-gradient">{STYLE_REPORT.matchedCoachStyle}</span>
+                  <span className="text-base font-semibold text-gradient">{styleReport.matchedCoachStyle}</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-3">
                   您的 AI 教练分身已准备就绪，来访者可以在教练广场找到并与之对话。
@@ -591,6 +661,9 @@ export default function CounselorOnboard() {
                     setQuestionIndex(0);
                     setElapsedSeconds(0);
                     setIsTimerRunning(false);
+                    setStyleReport(FALLBACK_REPORT);
+                    setAnalysisError(false);
+                    setAnalysisProgress(0);
                   }}
                   className="inline-flex items-center gap-2 px-7 py-3 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all"
                 >
